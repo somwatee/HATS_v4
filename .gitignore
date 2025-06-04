@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
+
+# MQL5
+*.ex5
+*.mq5.compiled
+obj/
+
+# Log / Data
+logs/
+data/
+
+# IDE
+.vscode/
+*.idea/

@@ -1,0 +1,9 @@
+pandas
+numpy
+scikit-learn
+xgboost
+river
+matplotlib
+pyyaml
+MetaTrader5
+requests

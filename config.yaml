@@ -1,0 +1,28 @@
+Symbol: XAUUSD
+Timeframe_M1: M1
+Timeframe_M15: M15
+
+RiskPercent: 1.0
+ATR_Period_M1: 14
+EMA_Fast_M15: 50
+EMA_Slow_M15: 200
+RSI_Period_M15: 14
+ADX_Period_M15: 14
+ADX_Threshold_M15: 18.0
+
+SessionStartHour: 7
+SessionEndHour: 15
+
+LotStep: 0.01
+MinLot: 0.01
+MaxLot: 10.0
+
+XGB_Threshold: 0.70
+CooldownSeconds: 60
+
+UseVolumeSpike: true
+UsePatternFilter: true
+UseMLFilter: true
+
+TelegramBotToken: "7965521188:AAFoDFO5_SCg8Ole5LjiMiFkkJfRPoOpBB8"
+TelegramChatID:   "1730880271"
