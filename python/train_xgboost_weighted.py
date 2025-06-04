@@ -1,26 +1,29 @@
 """
-file: python/train_xgboost.py
+file: python/train_xgboost_weighted.py
 วัตถุประสงค์:
   1) อ่าน data/data_with_features.csv -> สร้าง data/ict_labels.csv (label + SL, TP1, TP2, TP3 ตาม ICT Logic)
-  2) ทำ Walk-forward CV ด้วย XGBoost -> สร้าง models/walkforward_report.txt
-  3) ฝึกโมเดลสุดท้ายบนข้อมูลทั้งหมด -> บันทึก models/xgb_model.json, models/label_classes.json
+  2) ทำ Walk‐forward CV ด้วย XGBoost โดยใส่น้ำหนักคลาส (sample_weight) เพื่อชดเชย class imbalance
+     -> สร้าง models/walkforward_report.txt
+  3) ฝึกโมเดลสุดท้ายบนข้อมูลทั้งหมด (weighted) -> บันทึก models/xgb_model.json, models/label_classes.json
 
 Usage:
-  python train_xgboost.py
+  python train_xgboost_weighted.py
 """
 
 import os
 import pandas as pd
 import yaml
 import json
+from collections import Counter
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import classification_report
 import xgboost as xgb
+import numpy as np
 
 
 def load_config(config_path: str) -> dict:
-    """โหลด config จาก YAML"""
+    """โหลด config จากไฟล์ YAML"""
     if not os.path.isfile(config_path):
         raise FileNotFoundError(f"ไม่พบไฟล์ config: {config_path}")
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -32,7 +35,7 @@ def create_ict_labels(features_csv: str, out_csv: str, config: dict):
     อ่าน features CSV แล้วสร้าง ICT labels + SL, TP1, TP2, TP3
     เก็บผลใน out_csv
     """
-    df = pd.read_csv(features_csv, parse_dates=['time'])
+    df = pd.read_csv(features_csv, parse_dates=['time', 'mssTime', 'timeFVG'])
     df = df.sort_values('time').reset_index(drop=True)
 
     # เตรียมคอลัมน์สำหรับ label และ SL/TP
@@ -49,7 +52,7 @@ def create_ict_labels(features_csv: str, out_csv: str, config: dict):
         label = 'NoTrade'
         SL = TP1 = TP2 = TP3 = 0.0
 
-        # ค่า basic
+        # ค่าเบื้องต้น
         isBull = bool(row['isBullMSS'])
         FVG_Bottom = row['FVG_Bottom']
         FVG_Top = row['FVG_Top']
@@ -72,9 +75,9 @@ def create_ict_labels(features_csv: str, out_csv: str, config: dict):
         if not pd.isna(row['mssTime']) and FVG_Bottom != 0:
             # ตรวจ FVG-Fibonacci overlap
             if isBull:
-                fibOverlap = (FVG_Top >= fib38 and FVG_Bottom <= fib61)
+                fibOverlap = (FVG_Top >= fib38) and (FVG_Bottom <= fib61)
             else:
-                fibOverlap = (FVG_Bottom <= fib61 and FVG_Top >= fib38)
+                fibOverlap = (FVG_Bottom <= fib61) and (FVG_Top >= fib38)
 
             # ตรวจ pullback within FVG
             if isBull:
@@ -112,15 +115,31 @@ def create_ict_labels(features_csv: str, out_csv: str, config: dict):
     print(f"[INFO] Saved ICT labels to {out_csv}")
 
 
+def compute_class_weights(y_train: np.ndarray) -> np.ndarray:
+    """
+    คำนวณน้ำหนักตัวอย่าง (sample weights) จากความถี่ของคลาส
+    weight_i = total_samples / (num_classes * count_class[y_i])
+    """
+    counts = Counter(y_train)
+    num_classes = len(counts)
+    total = len(y_train)
+    class_weights = {cls: total / (num_classes * count) for cls, count in counts.items()}
+    # สร้าง array weight ตามแต่ละตัวอย่าง
+    sample_weights = np.array([class_weights[label] for label in y_train], dtype=float)
+    return sample_weights
+
+
 def train_walkforward(label_csv: str, config: dict):
     """
-    อ่าน label CSV -> ทำ Walk‐forward CV -> บันทึกรายงาน -> ฝึกโมเดลสุดท้าย -> บันทึกโมเดลและ classes
+    อ่าน label CSV -> ทำ Walk‐forward CV (weighted) -> บันทึกรายงาน -> ฝึกโมเดลสุดท้าย (weighted) -> บันทึกโมเดลและ classes
     """
-    df = pd.read_csv(label_csv, parse_dates=['time'])
+    df = pd.read_csv(label_csv, parse_dates=['time', 'mssTime', 'timeFVG'])
     df = df.sort_values('time').reset_index(drop=True)
 
-    # แยก features และ target
-    feature_cols = [col for col in df.columns if col not in ['time', 'label', 'SL', 'TP1', 'TP2', 'TP3']]
+    # *** กรองเฉพาะคอลัมน์ตัวเลข (numeric) แล้วตัดคอลัมน์ SL, TP1, TP2, TP3 ออก ***
+    numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+    feature_cols = [c for c in numeric_cols if c not in ['SL', 'TP1', 'TP2', 'TP3']]
+
     X_df = df[feature_cols]
     le = LabelEncoder()
     y = le.fit_transform(df['label'])
@@ -132,28 +151,35 @@ def train_walkforward(label_csv: str, config: dict):
     fold = 0
 
     # อ่านพารามิเตอร์ XGB จาก config
-    xgb_params = config.get('XGB_Params', {})  # เช่น {'max_depth':4, 'learning_rate':0.1, ...}
+    xgb_params = config.get('XGB_Params', {})
 
     for train_idx, test_idx in tscv.split(X):
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
 
+        # คำนวณ sample_weight สำหรับ training ตามความถี่คลาส
+        sample_weight = compute_class_weights(y_train)
+
         model = xgb.XGBClassifier(
             objective='multi:softprob',
             num_class=len(le.classes_),
-            use_label_encoder=False,
             eval_metric='mlogloss',
             **xgb_params
         )
-        model.fit(X_train, y_train)
+        model.fit(X_train, y_train, sample_weight=sample_weight)
+
+        # ทำนายโดยตรงให้ได้ 1D array
         y_pred = model.predict(X_test)
+        if y_pred.ndim > 1:
+            y_pred = np.argmax(y_pred, axis=1)
+
         report_dict = classification_report(y_test, y_pred, output_dict=True)
         report_dict['fold'] = fold
         reports.append(report_dict)
         print(f"[INFO] Completed fold {fold} of walk-forward.")
         fold += 1
 
-    # เขียนรายงาน walkforward_report.txt
+    # เขียน walkforward_report.txt
     report_path = os.path.abspath(os.path.join(os.path.dirname(label_csv), "../models/walkforward_report.txt"))
     os.makedirs(os.path.dirname(report_path), exist_ok=True)
     with open(report_path, 'w') as f:
@@ -162,16 +188,18 @@ def train_walkforward(label_csv: str, config: dict):
             f.write("\n")
     print(f"[INFO] Saved walkforward report to {report_path}")
 
-    # Train final model on all data
+    # Train final model on all data (weighted)
+    sample_weight_all = compute_class_weights(y)
     final_model = xgb.XGBClassifier(
         objective='multi:softprob',
         num_class=len(le.classes_),
-        use_label_encoder=False,
         eval_metric='mlogloss',
         **xgb_params
     )
-    final_model.fit(X, y)
+    final_model.fit(X, y, sample_weight=sample_weight_all)
+
     model_path = os.path.abspath(os.path.join(os.path.dirname(label_csv), "../models/xgb_model.json"))
+    os.makedirs(os.path.dirname(model_path), exist_ok=True)
     final_model.save_model(model_path)
     print(f"[INFO] Saved final XGB model to {model_path}")
 
@@ -183,7 +211,7 @@ def train_walkforward(label_csv: str, config: dict):
 
 
 if __name__ == "__main__":
-    # paths
+    # Paths
     config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../config.yaml"))
     features_csv = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/data_with_features.csv"))
     label_csv = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/ict_labels.csv"))
@@ -198,5 +226,5 @@ if __name__ == "__main__":
     # สร้าง ICT labels
     create_ict_labels(features_csv, label_csv, conf)
 
-    # ทำ walk-forward และ train final model
+    # ทำ walk-forward weighted และ train final weighted model
     train_walkforward(label_csv, conf)

@@ -24,22 +24,20 @@ def compute_features(historical_csv: str, output_csv: str):
     df['isBullMSS'] = False
     df['mssTime']   = pd.NaT
 
-    # 1. คำนวณ MSS (Market Structure Shift)
-    for i in range(1, len(df)-1):
-        # Swing High
-        if df.loc[i, 'high'] > df.loc[i-1, 'high'] and df.loc[i, 'high'] > df.loc[i+1, 'high']:
-            if df.loc[i+1, 'close'] > df.loc[i, 'high']:
-                df.loc[i+1, 'isBullMSS'] = True
-                df.loc[i+1, 'swingHigh'] = df.loc[i, 'high']
-                df.loc[i+1, 'swingLow'] = df.loc[i, 'low']
-                df.loc[i+1, 'mssTime'] = df.loc[i+1, 'time']
-        # Swing Low
-        if df.loc[i, 'low'] < df.loc[i-1, 'low'] and df.loc[i, 'low'] < df.loc[i+1, 'low']:
-            if df.loc[i+1, 'close'] < df.loc[i, 'low']:
-                df.loc[i+1, 'isBullMSS'] = False
-                df.loc[i+1, 'swingLow'] = df.loc[i, 'low']
-                df.loc[i+1, 'swingHigh'] = df.loc[i, 'high']
-                df.loc[i+1, 'mssTime'] = df.loc[i+1, 'time']
+    # 1. คำนวณ MSS (Market Structure Shift) — ใช้เกณฑ์ “close ทะลุ high/low ของ bar ก่อนหน้า”
+    for i in range(1, len(df)):
+        # Bull MSS: ถ้า close[i] > high[i-1]
+        if df.loc[i, 'close'] > df.loc[i-1, 'high']:
+            df.loc[i, 'isBullMSS'] = True
+            df.loc[i, 'swingHigh'] = df.loc[i, 'high']
+            df.loc[i, 'swingLow']  = df.loc[i, 'low']
+            df.loc[i, 'mssTime']   = df.loc[i, 'time']
+        # Bear MSS: ถ้า close[i] < low[i-1]
+        elif df.loc[i, 'close'] < df.loc[i-1, 'low']:
+            df.loc[i, 'isBullMSS'] = False
+            df.loc[i, 'swingLow']  = df.loc[i, 'low']
+            df.loc[i, 'swingHigh'] = df.loc[i, 'high']
+            df.loc[i, 'mssTime']   = df.loc[i, 'time']
 
     # 2. คำนวณ FVG (Fair Value Gap)
     df['FVG_Bottom'] = 0.0
@@ -50,10 +48,12 @@ def compute_features(historical_csv: str, output_csv: str):
         if pd.isna(df.loc[idx, 'mssTime']):
             continue
         for j in range(idx-1, 1, -1):
-            # เช็ค 3 แท่งก่อนหน้านี้เป็นบวก (green)
-            if (df.loc[j-2, 'close'] > df.loc[j-2, 'open'] and
+            # ถ้า 3 แท่งก่อนหน้าเป็นแท่งเขียว (green)
+            if (
+                df.loc[j-2, 'close'] > df.loc[j-2, 'open'] and
                 df.loc[j-1, 'close'] > df.loc[j-1, 'open'] and
-                df.loc[j,   'close'] > df.loc[j,   'open']):
+                df.loc[j,   'close'] > df.loc[j,   'open']
+            ):
                 bottom = df.loc[j-1, 'low']
                 top    = df.loc[j,   'high']
                 if bottom > top:
@@ -61,10 +61,12 @@ def compute_features(historical_csv: str, output_csv: str):
                     df.loc[idx, 'FVG_Top']    = bottom
                     df.loc[idx, 'timeFVG']    = df.loc[j-2, 'time']
                     break
-            # เช็ค 3 แท่งก่อนหน้านี้เป็นลบ (red)
-            if (df.loc[j-2, 'close'] < df.loc[j-2, 'open'] and
+            # ถ้า 3 แท่งก่อนหน้าเป็นแท่งแดง (red)
+            if (
+                df.loc[j-2, 'close'] < df.loc[j-2, 'open'] and
                 df.loc[j-1, 'close'] < df.loc[j-1, 'open'] and
-                df.loc[j,   'close'] < df.loc[j,   'open']):
+                df.loc[j,   'close'] < df.loc[j,   'open']
+            ):
                 bottom = df.loc[j,   'low']
                 top    = df.loc[j-1, 'high']
                 if top > bottom:
@@ -105,7 +107,7 @@ def compute_features(historical_csv: str, output_csv: str):
     df['PV']      = df['typical'] * df['tick_volume']
     df['VWAP_M1'] = df['PV'].rolling(window=14).sum() / df['tick_volume'].rolling(window=14).sum()
 
-    # 6. Resample to M15 for EMA, RSI, ADX (ใช้ '15min' แทน '15T')
+    # 6. Resample to M15 for EMA, RSI, ADX (ใช้ '15min')
     df_15 = df[['time', 'high', 'low', 'close']].copy()
     df_15 = df_15.set_index('time').resample('15min').agg({
         'high': 'max',
@@ -159,7 +161,8 @@ def compute_features(historical_csv: str, output_csv: str):
                     df.loc[idx, 'pattern_flag'] = 1
                 # Shooting Star
                 body = abs(prev['close'] - prev['open'])
-                upperWick = (prev['high'] - prev['open'] if prev['close'] < prev['open'] else prev['high'] - prev['close'])
+                upperWick = (prev['high'] - prev['open'] if prev['close'] < prev['open'] 
+                             else prev['high'] - prev['close'])
                 if upperWick >= 2 * body and body <= 0.3 * (prev['high'] - prev['low']):
                     df.loc[idx, 'pattern_flag'] = 1
 
