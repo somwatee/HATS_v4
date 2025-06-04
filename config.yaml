@@ -26,3 +26,8 @@ UseMLFilter: true
 
 TelegramBotToken: "7965521188:AAFoDFO5_SCg8Ole5LjiMiFkkJfRPoOpBB8"
 TelegramChatID:   "1730880271"
+
+# MT5 Account Credentials
+AccountLogin: 25198868          # เลขบัญชี MT5 ของคุณ
+AccountPassword: "R6^e}%_>rt&Z"  # รหัสผ่านบัญชี
+AccountServer: "demo.mt5tickmill.com"  # ชื่อเซิร์ฟเวอร์ MT5
