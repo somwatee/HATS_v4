@@ -167,8 +167,15 @@ bool GetRealTimeFeatures(int bar_index,
       }
    }
 
-   //--- 4) ATR14 (M1) โดยเรียกฟังก์ชัน iATR ตรง ๆ
-   ATR14 = iATR(_Symbol, PERIOD_M1, InpATR_Period_M1, 0);
+   //--- 4) ATR14 (M1) โดยสร้าง handle และใช้ CopyBuffer
+   int handleATR = iATR(_Symbol, PERIOD_M1, InpATR_Period_M1);
+   if(handleATR == INVALID_HANDLE)
+      return(false);
+   double arrATR[];
+   if(CopyBuffer(handleATR, 0, 0, 1, arrATR) != 1)
+      return(false);
+   ATR14 = arrATR[0];
+   IndicatorRelease(handleATR);
 
    //--- 5) VWAP_M1: คำนวณจาก 14 bar ล่าสุด
    MqlRates recentRates[];
@@ -185,10 +192,41 @@ bool GetRealTimeFeatures(int bar_index,
    VWAP_M1 = (sumVol == 0.0) ? recentRates[0].close : (sumPV / sumVol);
 
    //--- 6) EMA50_M15, EMA200_M15, RSI14_M15, ADX14_M15 (M15)
-   EMA50_M15  = iMA(_Symbol, PERIOD_M15, InpEMA_Fast_M15, 0, MODE_EMA, PRICE_CLOSE, 0);
-   EMA200_M15 = iMA(_Symbol, PERIOD_M15, InpEMA_Slow_M15, 0, MODE_EMA, PRICE_CLOSE, 0);
-   RSI14_M15  = iRSI(_Symbol, PERIOD_M15, InpRSI_Period_M15, PRICE_CLOSE, 0);
-   ADX14_M15  = iADX(_Symbol, PERIOD_M15, InpADX_Period_M15, PRICE_CLOSE, MODE_MAIN, 0);
+   int handleEMA50 = iMA(_Symbol, PERIOD_M15, InpEMA_Fast_M15, 0, MODE_EMA, PRICE_CLOSE);
+   int handleEMA200= iMA(_Symbol, PERIOD_M15, InpEMA_Slow_M15, 0, MODE_EMA, PRICE_CLOSE);
+   int handleRSI  = iRSI(_Symbol, PERIOD_M15, InpRSI_Period_M15, PRICE_CLOSE);
+   int handleADX  = iADX(_Symbol, PERIOD_M15, InpADX_Period_M15, PRICE_MEDIAN, PRICE_CLOSE);
+
+   if(handleEMA50  == INVALID_HANDLE ||
+      handleEMA200 == INVALID_HANDLE ||
+      handleRSI    == INVALID_HANDLE ||
+      handleADX    == INVALID_HANDLE)
+   {
+      return(false);
+   }
+
+   double arrEMA50[], arrEMA200[], arrRSI[], arrADX[];
+   if(CopyBuffer(handleEMA50,  0, 0, 1, arrEMA50)  != 1 ||
+      CopyBuffer(handleEMA200, 0, 0, 1, arrEMA200) != 1 ||
+      CopyBuffer(handleRSI,    0, 0, 1, arrRSI)     != 1 ||
+      CopyBuffer(handleADX,    0, 0, 1, arrADX)     != 1)
+   {
+      IndicatorRelease(handleEMA50);
+      IndicatorRelease(handleEMA200);
+      IndicatorRelease(handleRSI);
+      IndicatorRelease(handleADX);
+      return(false);
+   }
+
+   EMA50_M15  = arrEMA50[0];
+   EMA200_M15 = arrEMA200[0];
+   RSI14_M15  = arrRSI[0];
+   ADX14_M15  = arrADX[0];
+
+   IndicatorRelease(handleEMA50);
+   IndicatorRelease(handleEMA200);
+   IndicatorRelease(handleRSI);
+   IndicatorRelease(handleADX);
 
    //--- 7) Candlestick Pattern Flag (M1) ณ timeFVG
    pattern_flag = 0;
