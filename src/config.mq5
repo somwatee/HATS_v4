@@ -29,3 +29,14 @@ input bool   InpUseMLFilter        = true;       // Enable ML secondary filter
 input string InpTelegramBotToken   = "";         // Telegram Bot Token
 input string InpTelegramChatID     = "";         // Telegram Chat ID
 input int    InpCooldownSeconds    = 60;         // Cooldown between OnTick loops (seconds)
+
+//--- แก้ปัญหา “event handling function not found” โดยเพิ่ม stub event handlers
+int OnInit()
+{
+   return(INIT_SUCCEEDED);
+}
+
+void OnDeinit(const int reason)
+{
+   // ไม่มีการทำงานเพิ่มเติม ณ การปิด EA
+}
