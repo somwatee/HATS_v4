@@ -173,7 +173,10 @@ bool GetRealTimeFeatures(int bar_index,
       return(false);
    double arrATR[];
    if(CopyBuffer(handleATR, 0, 0, 1, arrATR) != 1)
+   {
+      IndicatorRelease(handleATR);
       return(false);
+   }
    ATR14 = arrATR[0];
    IndicatorRelease(handleATR);
 
@@ -192,16 +195,21 @@ bool GetRealTimeFeatures(int bar_index,
    VWAP_M1 = (sumVol == 0.0) ? recentRates[0].close : (sumPV / sumVol);
 
    //--- 6) EMA50_M15, EMA200_M15, RSI14_M15, ADX14_M15 (M15)
-   int handleEMA50 = iMA(_Symbol, PERIOD_M15, InpEMA_Fast_M15, 0, MODE_EMA, PRICE_CLOSE);
-   int handleEMA200= iMA(_Symbol, PERIOD_M15, InpEMA_Slow_M15, 0, MODE_EMA, PRICE_CLOSE);
-   int handleRSI  = iRSI(_Symbol, PERIOD_M15, InpRSI_Period_M15, PRICE_CLOSE);
-   int handleADX  = iADX(_Symbol, PERIOD_M15, InpADX_Period_M15, PRICE_MEDIAN, PRICE_CLOSE);
+   int handleEMA50  = iMA(_Symbol, PERIOD_M15, InpEMA_Fast_M15, 0, MODE_EMA, PRICE_CLOSE);
+   int handleEMA200 = iMA(_Symbol, PERIOD_M15, InpEMA_Slow_M15, 0, MODE_EMA, PRICE_CLOSE);
+   int handleRSI   = iRSI(_Symbol, PERIOD_M15, InpRSI_Period_M15, PRICE_CLOSE);
+   int handleADX   = iADX(_Symbol, PERIOD_M15, InpADX_Period_M15, PRICE_CLOSE);
 
    if(handleEMA50  == INVALID_HANDLE ||
       handleEMA200 == INVALID_HANDLE ||
       handleRSI    == INVALID_HANDLE ||
       handleADX    == INVALID_HANDLE)
    {
+      // ถ้ามี handle ใดล้มเหลว ขอปล่อย handlers ที่สร้างแล้ว
+      if(handleEMA50  != INVALID_HANDLE) IndicatorRelease(handleEMA50);
+      if(handleEMA200 != INVALID_HANDLE) IndicatorRelease(handleEMA200);
+      if(handleRSI    != INVALID_HANDLE) IndicatorRelease(handleRSI);
+      if(handleADX    != INVALID_HANDLE) IndicatorRelease(handleADX);
       return(false);
    }
 
@@ -211,6 +219,7 @@ bool GetRealTimeFeatures(int bar_index,
       CopyBuffer(handleRSI,    0, 0, 1, arrRSI)     != 1 ||
       CopyBuffer(handleADX,    0, 0, 1, arrADX)     != 1)
    {
+      // ปล่อย handlers ที่สร้างแล้ว
       IndicatorRelease(handleEMA50);
       IndicatorRelease(handleEMA200);
       IndicatorRelease(handleRSI);
