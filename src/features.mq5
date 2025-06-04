@@ -198,7 +198,7 @@ bool GetRealTimeFeatures(int bar_index,
    int handleEMA50  = iMA(_Symbol, PERIOD_M15, InpEMA_Fast_M15, 0, MODE_EMA, PRICE_CLOSE);
    int handleEMA200 = iMA(_Symbol, PERIOD_M15, InpEMA_Slow_M15, 0, MODE_EMA, PRICE_CLOSE);
    int handleRSI   = iRSI(_Symbol, PERIOD_M15, InpRSI_Period_M15, PRICE_CLOSE);
-   int handleADX   = iADX(_Symbol, PERIOD_M15, InpADX_Period_M15, PRICE_CLOSE);
+   int handleADX   = iADX(_Symbol, PERIOD_M15, InpADX_Period_M15);
 
    if(handleEMA50  == INVALID_HANDLE ||
       handleEMA200 == INVALID_HANDLE ||
