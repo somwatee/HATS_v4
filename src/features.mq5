@@ -1,17 +1,9 @@
 // file: src/features.mq5
+#property library
 #property strict
 
-// ฟังก์ชันสำหรับคำนวณ MSS, FVG, Fibonacci, ATR, VWAP, Indicators, Candlestick Pattern (Real-time)
-// คืนค่าผ่าน parameters by reference พร้อม debug Print() เพื่อเช็กว่าแต่ละขั้นทำงานหรือไม่
-
+#include "config.mq5"           // นำเข้า Input Parameters (InpATR_Period_M1, InpEMA_Fast_M15 ฯลฯ)
 #include <Trade\SymbolInfo.mqh>  // สำหรับ SYMBOL_VOLUME, SYMBOL_BID, SYMBOL_ASK ฯลฯ
-
-// รับตัวแปร input จาก config.mq5
-extern int    InpATR_Period_M1;
-extern int    InpEMA_Fast_M15;
-extern int    InpEMA_Slow_M15;
-extern int    InpRSI_Period_M15;
-extern int    InpADX_Period_M15;
 
 //+------------------------------------------------------------------+
 //| GetRealTimeFeatures                                              |
@@ -85,10 +77,8 @@ bool GetRealTimeFeatures(int bar_index,
 
    // --- (2) FVG (Fair Value Gap) Debug ---
    Print(">> features: Checking FVG...");
-   // หา FVG โดยเดินย้อนกลับจาก i-1 ถึง index=2 (อย่างน้อยต้องมี 3 แท่งก่อนหน้า)
    for(int j = i-1; j >= 2; j--)
      {
-      // 3 แท่งก่อน j เป็นแท่งเขียว (green)
       bool isGreen1 = (ratesM1[j-2].close > ratesM1[j-2].open);
       bool isGreen2 = (ratesM1[j-1].close > ratesM1[j-1].open);
       bool isGreen3 = (ratesM1[j].close   > ratesM1[j].open);
@@ -106,7 +96,6 @@ bool GetRealTimeFeatures(int bar_index,
             break;
            }
         }
-      // 3 แท่งก่อน j เป็นแท่งแดง (red)
       bool isRed1 = (ratesM1[j-2].close < ratesM1[j-2].open);
       bool isRed2 = (ratesM1[j-1].close < ratesM1[j-1].open);
       bool isRed3 = (ratesM1[j].close   < ratesM1[j].open);
@@ -153,7 +142,6 @@ bool GetRealTimeFeatures(int bar_index,
 
    // --- (4) ATR14 (M1) Debug ---
    Print(">> features: Calculating ATR14...");
-   // คำนวณ True Range (TR) สำหรับแต่ละ bar แล้วหา rolling mean 14 บาร์
    int totalBars = ArraySize(ratesM1);
    if(totalBars < 15)
      {
@@ -162,20 +150,18 @@ bool GetRealTimeFeatures(int bar_index,
      }
    else
      {
-      // คำนวณ TR จาก column ratesM1
       double TRArray[];
       ArrayResize(TRArray, totalBars);
       for(int k = 1; k < totalBars; k++)
         {
-         double high_k      = ratesM1[k].high;
-         double low_k       = ratesM1[k].low;
-         double prevClose   = ratesM1[k-1].close;
+         double high_k    = ratesM1[k].high;
+         double low_k     = ratesM1[k].low;
+         double prevClose = ratesM1[k-1].close;
          double tr1 = high_k - low_k;
          double tr2 = fabs(high_k - prevClose);
          double tr3 = fabs(low_k  - prevClose);
          TRArray[k] = MathMax(tr1, MathMax(tr2, tr3));
         }
-      // คำนวณ rolling mean ของ 14 bars (k from totalBars-14 to totalBars-1 คือล่าสุด)
       double sumTR = 0.0;
       for(int k = totalBars-14; k < totalBars; k++)
          sumTR += TRArray[k];
@@ -197,7 +183,7 @@ bool GetRealTimeFeatures(int bar_index,
       for(int k = totalBars-14; k < totalBars; k++)
         {
          double typical = (ratesM1[k].high + ratesM1[k].low + ratesM1[k].close) / 3.0;
-         double vol     = ratesM1[k].tick_volume;
+         double vol     = (double)ratesM1[k].tick_volume;
          sumPV  += typical * vol;
          sumVol += vol;
         }
@@ -207,31 +193,12 @@ bool GetRealTimeFeatures(int bar_index,
 
    // --- (6) Resample to M15, คำนวณ EMA50/EMA200, RSI14, ADX14  Debug ---
    Print(">> features: Resampling to M15 for EMA/RSI/ADX...");
-   // สร้าง dataframe จาก ratesM1 ที่มี column time, high, low, close
-   int rowsM1 = ArraySize(ratesM1);
-   datetime timesM1[];
-   double    highsM1[], lowsM1[], closesM1[];
-   ArrayResize(timesM1, rowsM1);
-   ArrayResize(highsM1, rowsM1);
-   ArrayResize(lowsM1, rowsM1);
-   ArrayResize(closesM1, rowsM1);
-   for(int k = 0; k < rowsM1; k++)
-     {
-      timesM1[k]  = ratesM1[k].time;
-      highsM1[k]  = ratesM1[k].high;
-      lowsM1[k]   = ratesM1[k].low;
-      closesM1[k] = ratesM1[k].close;
-     }
-
-   // นำข้อมูล M1 มา into dynamic array แล้วสร้างช่วง 15-min
-   // เนื่องจาก MQL5 ไม่มี pandas, เราจะใช้ iMA / iRSI / iADX โดยตรงบน timeframe M15
    int handleEMA50 = iMA(_Symbol, PERIOD_M15, InpEMA_Fast_M15, 0, MODE_EMA, PRICE_CLOSE);
    int handleEMA200= iMA(_Symbol, PERIOD_M15, InpEMA_Slow_M15, 0, MODE_EMA, PRICE_CLOSE);
    int handleRSI   = iRSI(_Symbol, PERIOD_M15, InpRSI_Period_M15, PRICE_CLOSE);
-   int handleADX   = iADX(_Symbol, PERIOD_M15, InpADX_Period_M15, PRICE_MEDIAN);
+   int handleADX   = iADX(_Symbol, PERIOD_M15, InpADX_Period_M15);
 
    double tempArr[];
-   // EMA50_M15
    if(CopyBuffer(handleEMA50, 0, 0, 1, tempArr) == 1)
      {
       EMA50_M15 = tempArr[0];
@@ -239,7 +206,6 @@ bool GetRealTimeFeatures(int bar_index,
      }
    else Print(">> features: CopyBuffer EMA50_M15 failed");
 
-   // EMA200_M15
    if(CopyBuffer(handleEMA200, 0, 0, 1, tempArr) == 1)
      {
       EMA200_M15 = tempArr[0];
@@ -247,7 +213,6 @@ bool GetRealTimeFeatures(int bar_index,
      }
    else Print(">> features: CopyBuffer EMA200_M15 failed");
 
-   // RSI14_M15
    if(CopyBuffer(handleRSI, 0, 0, 1, tempArr) == 1)
      {
       RSI14_M15 = tempArr[0];
@@ -255,7 +220,6 @@ bool GetRealTimeFeatures(int bar_index,
      }
    else Print(">> features: CopyBuffer RSI14_M15 failed");
 
-   // ADX14_M15
    if(CopyBuffer(handleADX, 0, 0, 1, tempArr) == 1)
      {
       ADX14_M15 = tempArr[0];
@@ -267,23 +231,19 @@ bool GetRealTimeFeatures(int bar_index,
    Print(">> features: Checking Candlestick Patterns...");
    if(timeFVG != 0)
      {
-      // ต้องดึง rates M1 ณ timeFVG และ 2 แท่งก่อนหน้า
       MqlRates patRates[3];
-      // CopyRates นำเข้าจาก timeFVG (ตำแหน่ง bar ตาม timestamp)
       if(CopyRates(_Symbol, PERIOD_M1, timeFVG, 3, patRates) == 3)
         {
          MqlRates prev2 = patRates[1];
          MqlRates prev  = patRates[0];
          if(isBullMSS)
            {
-            // Bullish Engulfing
             if(prev2.close < prev2.open && prev.close > prev.open &&
                prev.open < prev2.close && prev.close > prev2.open)
               {
                pattern_flag = 1;
                Print(">> features: Found Bullish Engulfing @ timeFVG");
               }
-            // Hammer
             double body = fabs(prev.close - prev.open);
             double lowerWick = (prev.open < prev.close ? prev.open : prev.close) - prev.low;
             if(lowerWick >= 2 * body && body <= 0.3 * (prev.high - prev.low))
@@ -294,14 +254,12 @@ bool GetRealTimeFeatures(int bar_index,
            }
          else
            {
-            // Bearish Engulfing
             if(prev2.close > prev2.open && prev.close < prev.open &&
                prev.open > prev2.close && prev.close < prev2.open)
               {
                pattern_flag = 1;
                Print(">> features: Found Bearish Engulfing @ timeFVG");
               }
-            // Shooting Star
             double body = fabs(prev.close - prev.open);
             double upperWick = (prev.close < prev.open ? prev.high - prev.open : prev.high - prev.close);
             if(upperWick >= 2 * body && body <= 0.3 * (prev.high - prev.low))
