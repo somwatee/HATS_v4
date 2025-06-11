@@ -31,3 +31,6 @@ TelegramChatID:   "1730880271"
 AccountLogin: 25198868          # เลขบัญชี MT5 ของคุณ
 AccountPassword: "R6^e}%_>rt&Z"  # รหัสผ่านบัญชี
 AccountServer: "demo.mt5tickmill.com"  # ชื่อเซิร์ฟเวอร์ MT5
+
+MT5:
+  DataPath: "C:\\Users\\Ponkit\\AppData\\Roaming\\MetaQuotes\\Terminal\\0A89B723E9501DAD3F2D5CB4F27EBDAB"
