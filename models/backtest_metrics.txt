@@ -1,5 +1,5 @@
-Total Trades: 2551
-Win Rate: 0.5907
-Profit Factor: 12.0172
-Max Drawdown: 481.9088
-Expectancy: 7.2115
+Total Trades: 2762
+Win Rate: 0.5847
+Profit Factor: 85.3464
+Max Drawdown: 334.8279
+Expectancy: 52.3771
